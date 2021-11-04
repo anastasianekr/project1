@@ -1,7 +1,7 @@
 ---
 title: 'Project 1: Wrangling, Exploration, Visualization'
 author: "SDS322E"
-date: ''
+date: '11/1/2021'
 output:
   html_document:
     toc: yes
@@ -19,72 +19,371 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 ## Data Wrangling, Exploration, Visualization
 
-### Name and EID here
+### Anastasia Nekrashevych, an26692
 
 #### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+To measure the happiness of a country, I will be using the World Happiness report from multiple years I found on Kaggle. The report attempts to measure the happiness of a country through the landmark survey conducted by Gallup World Poll. Participants from all countries are asked to think of a ladder where the highest part is marked as 10 and represents their ideal life. Then, they are asked to give a number regarding where they believe they are on the ladder. Additionally, the participants are asked how much they smiled and were happy yesterday and/or frowned and were upset. These metrics are put in percentage variables as the positive affect and the negative affect of a country. Aside from these variables, the report also provides other metrics such as how free individuals feel to make their own decisions in life. I will use the World Happiness report and add it to the alcohol consumption rate, life expectancy, suicide rate, urban percentage of population, and suicide rate of countries. These variables I will combine together from data I find on Gapminder.
+
+My initial hypothesis is that there will be no correlation between alcohol consumption and happiness. Although alcohol consumption is known to cause negative outcomes, I suspect that the overall elevated social and economic status of western countries will outweigh the negatives. Additionally, I suspect suicide rates will not have a positive correlation with overall happiness. However, I do believe there will be a correlation when Europe is studied separately. Although there are factors beyond those being studied that influence the mental well-being of a country, I am interested in seeing how alcohol consumption, life expectancy, suicide rate, and urban population are correlated with themselves and with alcohol.
 
 ```{R}
+
 # read your datasets in here, e.g., with read_csv()
+library(tidyverse)
+library(readr)
+
+alcohol_consumption <- read_csv("alcohol_who.csv")
+life_expectancy <- read_csv("life_expectancy_years.csv")
+suicide_rate <- read_csv("suicide_per_100000_people.csv")
+urban_pop <- read_csv("urban_population_percent_of_total.csv")
+happiness <- read_csv("world-happiness-report.csv")
 
 ```
+
+
 
 #### Tidying: Reshaping
 
-If your datasets are tidy already, demonstrate that you can reshape data with pivot wider/longer here (e.g., untidy and then retidy). Alternatively, it may be easier to wait until the wrangling section so you can reshape your summary statistics. Note here if you are going to do this.
+To tidy my data, I began by using pivot_longer in the urban population, life expectancy, and suicide rate data to create a year variable. Then I renamed the variables to fit my liking and changed the variable year from a character to a double. For the happiness dataset I removed the variable "Healthy life expectancy at birth" because I already had life expectancy data and renamed the variables to my liking. Lastly, for the alcohol_consumption dataset, I removed the gender variable by filtering when the data is marked as "Both sexes", chose four variables that could be effectively used for analysis, renamed the variables to my liking, and moved the country column to the beginning of the dataset.
 
 ```{R}
-# your tidying code (if applicable; can also wait until wrangling section)
+
+# World Happiness Report
+happiness <- happiness %>%
+  select(-"Healthy life expectancy at birth") %>%
+  rename(Country = "Country name") %>%
+  rename(Year = year) 
+  
+
+# Alcohol consumption
+alcohol_consumption <- alcohol_consumption %>%
+  filter(Dim1 == "Both sexes") %>%
+  select(ParentLocation, Location, Period, FactValueNumeric) %>%
+  rename(Country = Location) %>%
+  rename(Region = ParentLocation) %>%
+  rename(Year = Period) %>%
+  rename("Alcohol Liters per Person" = FactValueNumeric) %>%
+  select(Country, everything())
+
+
+# Suicide rate
+suicide_rate <- suicide_rate %>%
+  pivot_longer(-1, names_to = "Year") %>%
+  rename(Country = country) %>%
+  rename("Suicides per 100,000" = value) %>%
+  mutate(across(Year, as.double))
+
+
+# Urban population percentage of total
+urban_pop <- urban_pop %>%
+  pivot_longer(-1, names_to = "Year") %>%
+  rename(Country = country) %>%
+  rename("Urban Percentage of Population" = value) %>%
+  mutate(across(Year, as.double))
+
+
+# Life expectancy
+life_expectancy <- life_expectancy %>%
+  pivot_longer(-1, names_to = "Year") %>%
+  rename(Country = country) %>%
+  rename("Life Expectancy" = value) %>%
+  mutate(across(Year, as.double))
+
 ```
+
 
     
 #### Joining/Merging
 
 ```{R}
-# your joining code
 
-# your joining code
+alc_metrics <- alcohol_consumption %>%
+  left_join(life_expectancy, by = c("Country","Year")) %>%
+  left_join(urban_pop, by = c("Country", "Year")) %>%
+  left_join(suicide_rate, by = c("Country", "Year"))
+
+full_dataset <- happiness %>%
+  left_join(alc_metrics, by = c("Country", "Year"))
+  
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+I began merging my datasets by joining alcohol_consumption to life_expectancy, urban_pop, and suicide_rate. Alcohol_consumption has 3746 observations and 4 variables. The other three datasets have more observations, because they cover a larger number of years. However, other than year and country, they only contain one variable. Since each dataset contained the variables year and country, I decided to use them as identifiers. This allows me to analyze the behavior of each specific country's variables through time and provides a better picture of how the variables behave. I left joined the 3 datasets to the alcohol_consumption dataset by country and year so that each row contained data for these variables and named it alc_metrics.
+
+*After creating the alc_metrics dataset, I left joined it to the happiness dataset that contains data from the World Happiness report over time. The happiness dataset has 1949 observations and 10 variables. Combined with the alc_metrics dataset, the fully joined data set matches up with each unique identifier of country and year, leaving the fully joined dataset also with 1949 observations. Additionally, the fully joined dataset has 15 variables because it combines the 7 variables of alc_metrics (Country, Region, Year, Alcohol Liters per Person, Life Expectancy, Urban Percentage of Population, and Suicides per 100,000) with the 8 unique variables of the happiness dataset (Life Ladder, Log GDP per capita, Social support, Freedom to make life choices, Generosity, Perceptions of corruption, Positive affect, and Negative affect). Other than the identifier variables, year and country, all five of the original datasets I incorporated are unique and have no repeated variables. Lastly, the number of observations is greatly reduced in the fully merged dataset because the happiness dataset focuses on approximately ten years of data. 
+
+
 
 ####  Wrangling
 
 ```{R}
-# your wrangling code
 
-# your wrangling code
+full_dataset %>%
+  filter(str_detect(Region, "Europe")) %>%
+  select(`Life Ladder`, `Country`, `Year`) %>%
+  arrange(`Life Ladder`)
 
-# your wrangling code
+full_dataset %>%
+  mutate(`GDP per capita` = 10^(`Log GDP per capita`))
+
+# Categorical variables
+full_dataset %>%
+  group_by(`Country`) %>%
+  summarize(n())
+
+full_dataset %>%
+  group_by(`Year`) %>%
+  summarize(n())
+
+full_dataset %>%
+  group_by(`Region`) %>%
+  summarize(n())
+
+#Missing Values
+full_dataset %>%
+  summarize_all(~ sum(is.na(.)))
+
+# Summary Statics of Numeric Variables
+# Life Ladder
+full_dataset %>%
+  summarize(mean_Ladder = mean(`Life Ladder`, na.rm=TRUE),
+    sd_Ladder = sd(`Life Ladder`, na.rm=TRUE),
+    var_Ladder = var(`Life Ladder`, na.rm=TRUE),
+    min_Ladder = min(`Life Ladder`, na.rm=TRUE),
+    max_Ladder = max(`Life Ladder`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Region) %>%
+  summarize(mean_Ladder = mean(`Life Ladder`, na.rm=TRUE),
+    sd_Ladder = sd(`Life Ladder`, na.rm=TRUE),
+    var_Ladder = var(`Life Ladder`, na.rm=TRUE),
+    min_Ladder = min(`Life Ladder`, na.rm=TRUE),
+    max_Ladder = max(`Life Ladder`, na.rm=TRUE)) %>%
+  arrange(mean_Ladder) %>%
+  knitr::kable()
+
+# Log GDP per capita
+full_dataset %>%
+  summarize(mean_LogGDP = mean(`Log GDP per capita`, na.rm=TRUE),
+    sd_LogGDP = sd(`Log GDP per capita`, na.rm=TRUE),
+    var_LogGDP = var(`Log GDP per capita`, na.rm=TRUE),
+    min_LogGDP = min(`Log GDP per capita`, na.rm=TRUE),
+    max_LogGDP = max(`Log GDP per capita`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Region) %>%
+  summarize(mean_LogGDP = mean(`Log GDP per capita`, na.rm=TRUE),
+    sd_LogGDP = sd(`Log GDP per capita`, na.rm=TRUE),
+    var_LogGDP = var(`Log GDP per capita`, na.rm=TRUE),
+    min_LogGDP = min(`Log GDP per capita`, na.rm=TRUE),
+    max_LogGDP = max(`Log GDP per capita`, na.rm=TRUE)) %>%
+  arrange(desc(mean_LogGDP)) %>%
+  knitr::kable()
+
+# Positive affect
+full_dataset %>%
+  summarize(mean_PositiveA = mean(`Positive affect`, na.rm=TRUE),
+    sd_PositiveA = sd(`Positive affect`, na.rm=TRUE),
+    var_PositiveA = var(`Positive affect`, na.rm=TRUE),
+    min_PositiveA = min(`Positive affect`, na.rm=TRUE),
+    max_PositiveA = max(`Positive affect`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Region) %>%
+  summarize(mean_PositiveA = mean(`Positive affect`, na.rm=TRUE),
+    sd_PositiveA = sd(`Positive affect`, na.rm=TRUE),
+    var_PositiveA = var(`Positive affect`, na.rm=TRUE),
+    min_PositiveA = min(`Positive affect`, na.rm=TRUE),
+    max_PositiveA = max(`Positive affect`, na.rm=TRUE)) %>%
+  arrange(desc(mean_PositiveA)) %>%
+  knitr::kable()
+
+# Negative affect
+full_dataset %>%
+  summarize(mean_NegativeA = mean(`Negative affect`, na.rm=TRUE),
+    sd_NegativeA = sd(`Negative affect`, na.rm=TRUE),
+    var_NegativeA = var(`Negative affect`, na.rm=TRUE),
+    min_NegativeA = min(`Negative affect`, na.rm=TRUE),
+    max_NegativeA = max(`Negative affect`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Region) %>%
+  summarize(mean_NegativeA = mean(`Negative affect`, na.rm=TRUE),
+    sd_NegativeA = sd(`Negative affect`, na.rm=TRUE),
+    var_NegativeA = var(`Negative affect`, na.rm=TRUE),
+    min_NegativeA = min(`Negative affect`, na.rm=TRUE),
+    max_NegativeA = max(`Negative affect`, na.rm=TRUE)) %>%
+  arrange(desc(mean_NegativeA)) %>%
+  knitr::kable()
+
+# Alcohol Liters per Person
+full_dataset %>%
+  summarize(mean_AlcLiters = mean(`Alcohol Liters per Person`, na.rm=TRUE),
+    sd_AlcLiters = sd(`Alcohol Liters per Person`, na.rm=TRUE),
+    var_AlcLiters = var(`Alcohol Liters per Person`, na.rm=TRUE),
+    min_AlcLiters = min(`Alcohol Liters per Person`, na.rm=TRUE),
+    max_AlcLiters = max(`Alcohol Liters per Person`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Country, Year) %>%
+  summarize(mean_AlcLiters = mean(`Alcohol Liters per Person`, na.rm=TRUE),
+    min_AlcLiters = min(`Alcohol Liters per Person`, na.rm=TRUE),
+    max_AlcLiters = max(`Alcohol Liters per Person`, na.rm=TRUE),
+    Vodka_Handles = `Alcohol Liters per Person`/1.75) %>%
+  arrange(desc(Vodka_Handles))
+
+# Life Expectancy
+full_dataset %>%
+  summarize(mean_LifeExp = mean(`Life Expectancy`, na.rm=TRUE),
+    sd_LifeExp = sd(`Life Expectancy`, na.rm=TRUE),
+    var_LifeExp = var(`Life Expectancy`, na.rm=TRUE),
+    min_LifeExp = min(`Life Expectancy`, na.rm=TRUE),
+    max_LiefExp = max(`Life Expectancy`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Region) %>%
+  summarize(mean_LifeExp = mean(`Life Expectancy`, na.rm=TRUE),
+    sd_LifeExp = sd(`Life Expectancy`, na.rm=TRUE),
+    var_LifeExp = var(`Life Expectancy`, na.rm=TRUE),
+    min_LifeExp = min(`Life Expectancy`, na.rm=TRUE),
+    max_LiefExp = max(`Life Expectancy`, na.rm=TRUE)) %>%
+  arrange(desc(mean_LifeExp)) %>%
+  knitr::kable()
+
+# Urban Percentage of Population
+full_dataset %>%
+  summarize(mean_UrbanPop = mean(`Urban Percentage of Population`, na.rm=TRUE),
+    sd_UrbanPop = sd(`Urban Percentage of Population`, na.rm=TRUE),
+    var_UrbanPop = var(`Urban Percentage of Population`, na.rm=TRUE),
+    min_UrbanPop = min(`Urban Percentage of Population`, na.rm=TRUE),
+    max_UrbanPop = max(`Urban Percentage of Population`, na.rm=TRUE))
+
+full_dataset %>%
+  group_by(Country) %>%
+  summarize(mean_UrbanPop = mean(`Urban Percentage of Population`, na.rm=TRUE),
+    sd_UrbanPop = sd(`Urban Percentage of Population`, na.rm=TRUE),
+    var_UrbanPop = var(`Urban Percentage of Population`, na.rm=TRUE),
+    min_UrbanPop = min(`Urban Percentage of Population`, na.rm=TRUE),
+    max_UrbanPop = max(`Urban Percentage of Population`, na.rm=TRUE))
+
+# Suicides per 100,000
+full_dataset %>%
+  summarize(mean_Suicides = mean(`Suicides per 100,000`, na.rm=TRUE),
+    sd_Suicides = sd(`Suicides per 100,000`, na.rm=TRUE),
+    var_Suicides = var(`Suicides per 100,000`, na.rm=TRUE),
+    min_Suicides = min(`Suicides per 100,000`, na.rm=TRUE),
+    max_Suicides = max(`Suicides per 100,000`, na.rm=TRUE))
+
+full_dataset %>%
+  filter(Region != "Americas") %>%
+  group_by(Country, Year) %>%
+  summarize(mean_Suicides = mean(`Suicides per 100,000`, na.rm=TRUE),
+    sd_Suicides = sd(`Suicides per 100,000`, na.rm=TRUE),
+    var_Suicides = var(`Suicides per 100,000`, na.rm=TRUE),
+    min_Suicides = min(`Suicides per 100,000`, na.rm=TRUE),
+    max_Suicides = max(`Suicides per 100,000`, na.rm=TRUE)) %>%
+  arrange(desc(mean_Suicides))
+
+full_dataset %>%
+  group_by(Region) %>%
+  filter(Region != "Americas") %>%
+  summarize(mean_Suicides = mean(`Suicides per 100,000`, na.rm=TRUE),
+    sd_Suicides = sd(`Suicides per 100,000`, na.rm=TRUE),
+    var_Suicides = var(`Suicides per 100,000`, na.rm=TRUE),
+    min_Suicides = min(`Suicides per 100,000`, na.rm=TRUE),
+    max_Suicides = max(`Suicides per 100,000`, na.rm=TRUE),
+    num_Suicides = n()) %>%
+  arrange(desc(mean_Suicides)) %>%
+  knitr::kable()
+
 ```
 
-Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+I began wrangling my data by doing some exploratory analysis. Understanding Europe’s political climate and culture better than elsewhere in the world, I decided to look over its data by filtering it out using a str_detect function. Then, I selected Life Ladder, Country, and Year to see which countries in Europe in which years had the highest and lowest Life Ladder scores. I also decided to reverse the log of the log GDP per capita to see what the actual GDP per capita is of all countries. Before analyzing my numerical variables, I also obtained the frequency of each categorical variable and the number of missing values of each variable. 
+
+To compute the summary statistics of my numeric variables, I first found the individual mean, standard deviation, variance, and minimum of each numeric variable. Afterwards, for each numeric variable, I computed an additional summary statistic. For the life ladder, positive affect, negative affect, life expectancy, and Log GDP per capita variables, I grouped by region to see which regions were happier, lived longer, and had a higher income. For the alcohol liters per person variable, I was curious to see which countries drank the most. I grouped by country and year, computed the normal summary statistics, and added a function for how many handles were drunk per person in a year. For the urban percentage of population variable, I grouped by country to see which countries were the most urbanized. Lastly, for the suicide rate variable, I grouped by country and year to see which countries had the worst years regarding suicide and then by region to see which regions faired the worse.
+
 
 
 #### Visualizing
 
 ```{R}
-# your plot 1
+library(ggplot2)
+
+#graph including stat=summary""
+full_dataset %>%
+  filter(Region == "Europe") %>%
+  rename(Life_Ladder = `Life Ladder`) %>%
+  ggplot(aes(x = reorder(Country, -Life_Ladder), y=Life_Ladder)) +
+  geom_bar(aes(y=Life_Ladder, fill=Country), stat="summary", fun=mean) +
+  geom_errorbar(stat="summary", fun.data=mean_se) +
+  ggtitle("Life Ladder per European Country") +
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=rel(.7)), legend.position="none") +
+  scale_y_continuous(n.breaks=10) +
+  xlab("Country") +
+  ylab("Life Ladder")
+  
+
 ```
 
-Your discussion of plot 1
+*I created a bar plot to visually see how countries in Europe compare in happiness. I plotted the variable Life Ladder on the y axis and the variable Country on the x axis. I then calculated the mean Life Ladder result of each country per year and the standard error. The results show that, in general, Western Europeans are more content with their lives and happy than Eastern Europeans.*
+
 
 ```{R}
-# your plot 2
+
+full_dataset %>%
+  rename(Alcohol_Liters = `Alcohol Liters per Person`) %>%
+  rename(Life_Ladder = `Life Ladder`) %>%
+  ggplot(aes(x=Alcohol_Liters, y=Life_Ladder)) +
+  geom_point(aes(color=Region), size=0.5) + 
+  geom_smooth(method="lm") +
+  scale_x_continuous(n.breaks=10) +
+  ggtitle("Alcohol Consumption's effect on Happiness") +
+  xlab("Alcohol Liters per Person") +
+  ylab("Life Ladder") +
+  theme_minimal()
+
+full_dataset %>%
+  filter(Region == "Europe") %>%
+  rename(Alcohol_Liters = `Alcohol Liters per Person`) %>%
+  rename(Life_Ladder = `Life Ladder`) %>%
+  ggplot(aes(x=Alcohol_Liters, y=Life_Ladder)) +
+  geom_point(size=0.5) + 
+  geom_smooth(method="lm") +
+  scale_x_continuous(n.breaks=10) +
+  ggtitle("Alcohol Consumption's effect on Happiness in Europe") +
+  xlab("Alcohol Liters per Person") +
+  ylab("Life Ladder") +
+  theme_minimal()
+
 ```
 
-Your discussion of plot 2
+*Here, I created a scatter plot to illustrate how the amount of liters of alcohol a country drinks per person is correlated to the country's happiness. To do this, I plotted the alcohol consumption variable on the x axis, the life ladder variable on the y axis, and added a regression line on the results. The results showed a positive correlation between alcohol and happiness. I questioned this result, since happiness being correlated to alcohol consumption could be because European countries, where alcohol has long been an ingrained part of culture, are wealthier and more developed than most of the world. Therefore, I decided to create an identical second barplot, only restricting the region captured to Europe, to see if there would still be a positive correlation. There was still a positive correlation, but it was less than that of the world, and had most of its points spread around the center.* 
+
 
 ```{R}
-# your plot 3
+
+full_dataset %>%
+  filter(Region != "Americas") %>%
+  rename(Alcohol_Liters = `Alcohol Liters per Person`) %>%
+  rename(Suicide_Rate = `Suicides per 100,000`) %>%
+  ggplot(aes(x=Alcohol_Liters, y=Suicide_Rate)) +
+  geom_point(aes(color=Region), size=0.5) + 
+  geom_smooth(method="lm") +
+  scale_y_continuous(n.breaks=20) +
+  scale_x_continuous(n.breaks=10) +
+  theme_minimal() +
+  ggtitle("Alcohol Consumption's effect on Suicide") +
+  xlab("Alcohol Liters per Person") +
+  ylab("Suicides per 100,000 people")
+
 ```
 
-Your discussion of plot 3
+*Although there is a positive correlation between alcohol consumption and happiness, it is so small that most likely there is no correlation and what we see is a small discrepancy due to confounding variables. I wanted to see if another variable, such as suicide, would have a different correlation with alcohol consumption. The results show that there is a stronger correlation between suicide and alcohol consumption than between happiness and alcohol consumption. Additionally, Europe is shown to have very high rates of suicide compared to the rest of the countries studied. I hypothesize that this is because, although worse off countries may have less optimism and financial mobility, they tend to place more value on family life instead of individual success. This may translate to individuals feeling more responsibility for others and to better social support.*
+
 
 #### Concluding Remarks
 
-If any!
+I did not find any direct correlation between alcohol consumption in countries and their happiness. There was a slight positive correlation between the variables, but it was so minute and greatly affected by the region studied that it can most likely be attributed to confounding variables. I did find that Europe has a surprisingly high suicide rate, considering their economic wealth and high perceived happiness. This could signify that people in countries that are poor and politically turbulent understand that their upward mobility in life is limited and due to this gave a low score to the life ladder. However, because their opportunities are limited, perhaps they spend more of their efforts on maintaining strong familial bonds that keep them further away from abusing alcohol and committing suicide than more individually minded people in the west. To study this, one could create and analyze a report asking people of different countries what their most immediate priority is in life and in their immediate future.
 
 
 
